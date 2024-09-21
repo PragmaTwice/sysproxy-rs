@@ -59,6 +59,17 @@ impl Sysproxy {
     }
 }
 
+#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows",)))]
+impl Sysproxy {
+    pub fn get_system_proxy() -> Result<Sysproxy> {
+        Err(Error::NotSupport)
+    }
+
+    pub fn set_system_proxy(&self) -> Result<()> {
+        Err(Error::NotSupport)
+    }
+}
+
 impl Autoproxy {
     pub fn is_support() -> bool {
         cfg!(any(

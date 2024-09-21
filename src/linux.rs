@@ -3,9 +3,7 @@ use std::{env, process::Command, str::from_utf8, sync::LazyLock};
 
 const CMD_KEY: &str = "org.gnome.system.proxy";
 
-static IS_APPIMAGE: LazyLock<bool> = LazyLock::new(|| {
-    std::env::var("APPIMAGE").is_ok()
-});
+static IS_APPIMAGE: LazyLock<bool> = LazyLock::new(|| std::env::var("APPIMAGE").is_ok());
 
 impl Sysproxy {
     pub fn get_system_proxy() -> Result<Sysproxy> {
