@@ -5,6 +5,19 @@ const CMD_KEY: &str = "org.gnome.system.proxy";
 
 static IS_APPIMAGE: LazyLock<bool> = LazyLock::new(|| std::env::var("APPIMAGE").is_ok());
 
+enum DesktopEnv {
+    KDE,
+    GNOME,
+}
+
+fn get_de_type() -> Result<DesktopEnv> {
+    match env::var("XDG_CURRENT_DESKTOP").unwrap_or_default().as_str() {
+        "KDE" => Ok(DesktopEnv::KDE),
+        v if v.contains("GNOME") => Ok(DesktopEnv::GNOME),
+        _ => Err(Error::NotSupport),
+    }
+}
+
 impl Sysproxy {
     pub fn get_system_proxy() -> Result<Sysproxy> {
         let enable = Sysproxy::get_enable()?;
@@ -44,8 +57,8 @@ impl Sysproxy {
     }
 
     pub fn get_enable() -> Result<bool> {
-        match env::var("XDG_CURRENT_DESKTOP").unwrap_or_default().as_str() {
-            "KDE" => {
+        match get_de_type()? {
+            DesktopEnv::KDE => {
                 let xdg_dir = xdg::BaseDirectories::new()?;
                 let config = xdg_dir.get_config_file("kioslaverc");
                 let config = config.to_str().ok_or(Error::ParseStr("config".into()))?;
@@ -65,7 +78,7 @@ impl Sysproxy {
                     .trim();
                 Ok(mode == "1")
             }
-            _ => {
+            DesktopEnv::GNOME => {
                 let mode = gsettings().args(["get", CMD_KEY, "mode"]).output()?;
                 let mode = from_utf8(&mode.stdout)
                     .or(Err(Error::ParseStr("mode".into())))?
@@ -76,8 +89,8 @@ impl Sysproxy {
     }
 
     pub fn get_bypass() -> Result<String> {
-        match env::var("XDG_CURRENT_DESKTOP").unwrap_or_default().as_str() {
-            "KDE" => {
+        match get_de_type()? {
+            DesktopEnv::KDE => {
                 let xdg_dir = xdg::BaseDirectories::new()?;
                 let config = xdg_dir.get_config_file("kioslaverc");
                 let config = config.to_str().ok_or(Error::ParseStr("config".into()))?;
@@ -104,7 +117,7 @@ impl Sysproxy {
 
                 Ok(bypass)
             }
-            _ => {
+            DesktopEnv::GNOME => {
                 let bypass = gsettings()
                     .args(["get", CMD_KEY, "ignore-hosts"])
                     .output()?;
@@ -139,8 +152,8 @@ impl Sysproxy {
     }
 
     pub fn set_enable(&self) -> Result<()> {
-        match env::var("XDG_CURRENT_DESKTOP").unwrap_or_default().as_str() {
-            "KDE" => {
+        match get_de_type()? {
+            DesktopEnv::KDE => {
                 let xdg_dir = xdg::BaseDirectories::new()?;
                 let config = xdg_dir.get_config_file("kioslaverc");
                 let config = config.to_str().ok_or(Error::ParseStr("config".into()))?;
@@ -158,7 +171,7 @@ impl Sysproxy {
                     .status()?;
                 Ok(())
             }
-            _ => {
+            DesktopEnv::GNOME => {
                 let mode = if self.enable { "'manual'" } else { "'none'" };
                 gsettings().args(["set", CMD_KEY, "mode", mode]).status()?;
                 Ok(())
@@ -167,8 +180,8 @@ impl Sysproxy {
     }
 
     pub fn set_bypass(&self) -> Result<()> {
-        match env::var("XDG_CURRENT_DESKTOP").unwrap_or_default().as_str() {
-            "KDE" => {
+        match get_de_type()? {
+            DesktopEnv::KDE => {
                 let xdg_dir = xdg::BaseDirectories::new()?;
                 let config = xdg_dir.get_config_file("kioslaverc");
                 let config = config.to_str().ok_or(Error::ParseStr("config".into()))?;
@@ -186,7 +199,7 @@ impl Sysproxy {
                     .status()?;
                 Ok(())
             }
-            _ => {
+            DesktopEnv::GNOME => {
                 let bypass = self
                     .bypass
                     .split(',')
@@ -259,8 +272,8 @@ fn kwriteconfig() -> Command {
 }
 
 fn set_proxy(proxy: &Sysproxy, service: &str) -> Result<()> {
-    match env::var("XDG_CURRENT_DESKTOP").unwrap_or_default().as_str() {
-        "KDE" => {
+    match get_de_type()? {
+        DesktopEnv::KDE => {
             let xdg_dir = xdg::BaseDirectories::new()?;
             let config = xdg_dir.get_config_file("kioslaverc");
             let config = config.to_str().ok_or(Error::ParseStr("config".into()))?;
@@ -295,7 +308,7 @@ fn set_proxy(proxy: &Sysproxy, service: &str) -> Result<()> {
 
             Ok(())
         }
-        _ => {
+        DesktopEnv::GNOME => {
             let schema = format!("{CMD_KEY}.{service}");
             let schema = schema.as_str();
 
@@ -313,8 +326,8 @@ fn set_proxy(proxy: &Sysproxy, service: &str) -> Result<()> {
 }
 
 fn get_proxy(service: &str) -> Result<Sysproxy> {
-    match env::var("XDG_CURRENT_DESKTOP").unwrap_or_default().as_str() {
-        "KDE" => {
+    match get_de_type()? {
+        DesktopEnv::KDE => {
             let xdg_dir = xdg::BaseDirectories::new()?;
             let config = xdg_dir.get_config_file("kioslaverc");
             let config = config.to_str().ok_or(Error::ParseStr("config".into()))?;
@@ -345,7 +358,7 @@ fn get_proxy(service: &str) -> Result<Sysproxy> {
                 bypass: "".into(),
             })
         }
-        _ => {
+        DesktopEnv::GNOME => {
             let schema = format!("{CMD_KEY}.{service}");
             let schema = schema.as_str();
 
@@ -380,8 +393,8 @@ fn strip_str(text: &str) -> &str {
 
 impl Autoproxy {
     pub fn get_auto_proxy() -> Result<Autoproxy> {
-        let (enable, url) = match env::var("XDG_CURRENT_DESKTOP").unwrap_or_default().as_str() {
-            "KDE" => {
+        let (enable, url) = match get_de_type()? {
+            DesktopEnv::KDE => {
                 let xdg_dir = xdg::BaseDirectories::new()?;
                 let config = xdg_dir.get_config_file("kioslaverc");
                 let config = config.to_str().ok_or(Error::ParseStr("config".into()))?;
@@ -414,7 +427,7 @@ impl Autoproxy {
                     .trim();
                 (mode == "2", url.to_string())
             }
-            _ => {
+            DesktopEnv::GNOME => {
                 let mode = gsettings().args(["get", CMD_KEY, "mode"]).output()?;
                 let mode = from_utf8(&mode.stdout)
                     .or(Err(Error::ParseStr("mode".into())))?
@@ -434,8 +447,8 @@ impl Autoproxy {
     }
 
     pub fn set_auto_proxy(&self) -> Result<()> {
-        match env::var("XDG_CURRENT_DESKTOP").unwrap_or_default().as_str() {
-            "KDE" => {
+        match get_de_type()? {
+            DesktopEnv::KDE => {
                 let xdg_dir = xdg::BaseDirectories::new()?;
                 let config = xdg_dir.get_config_file("kioslaverc");
                 let config = config.to_str().ok_or(Error::ParseStr("config".into()))?;
@@ -463,7 +476,7 @@ impl Autoproxy {
                     ])
                     .status()?;
             }
-            _ => {
+            DesktopEnv::GNOME => {
                 let mode = if self.enable { "'auto'" } else { "'none'" };
                 gsettings().args(["set", CMD_KEY, "mode", mode]).status()?;
                 gsettings()
