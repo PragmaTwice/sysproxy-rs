@@ -1,6 +1,6 @@
 use crate::{Autoproxy, Error, Result, Sysproxy};
 use std::ffi::c_void;
-use std::{mem::size_of, mem::ManuallyDrop, net::SocketAddr, str::FromStr};
+use std::{mem::size_of, mem::ManuallyDrop};
 use windows::core::PWSTR;
 use windows::Win32::Networking::WinInet::{
     InternetSetOptionW, INTERNET_OPTION_PER_CONNECTION_OPTION,
@@ -154,10 +154,18 @@ impl Sysproxy {
         let (host, port) = if server.is_empty() {
             ("".into(), 0)
         } else {
-            let socket =
-                SocketAddr::from_str(server).or(Err(Error::ParseStr(server.to_string())))?;
-            let host = socket.ip().to_string();
-            let port = socket.port();
+            let socket = server
+                .rsplit_once(':')
+                .and_then(|(h, p)| {
+                    if let Ok(v) = p.parse::<u16>() {
+                        Some((h, v))
+                    } else {
+                        None
+                    }
+                })
+                .ok_or_else(|| Error::ParseStr(server.to_string()))?;
+            let host = socket.0.to_string();
+            let port = socket.1;
             (host, port)
         };
 
